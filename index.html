@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>15분 거래대금 장부 · 관심 109</title>
+<title>15분 거래대금 장부 · OKX 전체</title>
 <style>
   :root{
     --ink:#0E141B;
@@ -81,7 +81,7 @@
 </head>
 <body>
 <header>
-  <h1>15분 거래대금 장부 <span>관심 109</span></h1>
+  <h1>15분 거래대금 장부 <span>OKX 전체</span></h1>
   <div class="meta" id="meta">불러오는 중</div>
   <div class="controls">
     <select id="span" aria-label="표시 구간">
@@ -123,7 +123,7 @@ async function load() {
     document.getElementById("meta").textContent = "데이터 없음";
     document.getElementById("empty").innerHTML =
       "<strong>아직 쌓인 데이터가 없습니다</strong>" +
-      "GitHub 저장소의 Actions 탭에서 <code>collect-volumes</code>를 한 번 실행하면 " +
+      "GitHub 저장소의 Actions 탭에서 <code>collect</code>를 한 번 실행하면 " +
       "<code>data/volumes.json</code>이 만들어지고, 이후 15분마다 자동으로 채워집니다.";
     return;
   }
@@ -169,7 +169,7 @@ function render() {
       return `<td class="v ${cls}">${KRW(v)}</td>`;
     }).join("");
     const rank = r.rank === 99999 ? "–" : r.rank;
-    const url = `https://upbit.com/exchange?code=CRIX.UPBIT.${r.market}`;
+    const url = `https://www.okx.com/trade-spot/${r.sym.toLowerCase()}-usdt`;
     return `<tr><td class="rank">${rank}</td><td class="coin">` +
            `<a href="${url}" target="_blank" rel="noopener">${r.name}</a>` +
            `<span class="sym">${r.sym}</span></td>${cells}</tr>`;
