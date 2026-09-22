@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>15분 거래대금 장부 · OKX 전체</title>
+<title>15분 거래대금 장부 · OKX 선물</title>
 <style>
   :root{
     --ink:#0E141B;
@@ -81,7 +81,7 @@
 </head>
 <body>
 <header>
-  <h1>15분 거래대금 장부 <span>OKX 전체</span></h1>
+  <h1>15분 거래대금 장부 <span>OKX 선물</span></h1>
   <div class="meta" id="meta">불러오는 중</div>
   <div class="controls">
     <select id="span" aria-label="표시 구간">
@@ -169,7 +169,7 @@ function render() {
       return `<td class="v ${cls}">${KRW(v)}</td>`;
     }).join("");
     const rank = r.rank === 99999 ? "–" : r.rank;
-    const url = `https://www.okx.com/trade-spot/${r.sym.toLowerCase()}-usdt`;
+    const url = `https://www.okx.com/trade-swap/${r.sym.toLowerCase()}-usdt-swap`;
     return `<tr><td class="rank">${rank}</td><td class="coin">` +
            `<a href="${url}" target="_blank" rel="noopener">${r.name}</a>` +
            `<span class="sym">${r.sym}</span></td>${cells}</tr>`;
