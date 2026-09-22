@@ -1,23 +1,14 @@
 #!/usr/bin/env python3
-"""업비트 화면의 거래대금(24시간 누적)을 15분마다 기록하고, 시총 순위를 함께 모은다."""
+"""OKX 현물(USDT마켓) 전체 종목의 24시간 거래대금을 기록한다.
+표 화면에 그대로 보이도록 업비트 USDT 가격으로 원화(억원)로 바꿔 저장한다."""
 import json, os, time
 from datetime import datetime, timedelta, timezone
 import requests
 
-# ── 관심 109종목 (쉼표로 구분. 추가/삭제는 여기만 고치면 됨) ──────────────
-CODES = (
-    "FIL,XTZ,BAT,CELO,API3,BSV,BLUR,A,ZETA,THETA,NEO,AGLD,GMT,ORDER,ASTR,KNC,"
-    "CHZ,GRT,CAP,ME,MANA,ANIME,BABY,PYTH,QTUM,W,BIGTIME,AUCTION,GAS,IOTA,TIA,"
-    "SENT,0G,YGG,ATH,ALGO,CFX,STX,ICP,HBAR,VANA,BREV,LA,MASK,TAO,MEW,WAL,LAYER,"
-    "F,APT,ZRX,ZRO,SPX,DOS,AAVE,ZORA,1INCH,OPG,BTT,BARD,ARX,ZAMA,DOT,GRVT,ATOM,"
-    "WIF,ADA,AVAX,ONT,TRUST,BTC,ZK,PEPE,DOGE,IO,PLUME,ETC,TRUMP,AERO,BERA,SPK,"
-    "SOL,LINK,NEAR,SHIB,ETH,ENA,ENS,WLD,LINEA,KMNO,ENSO,COMP,PIEVERSE,EGLD,"
-    "SYRUP,PENDLE,PROS,DRV,JUP,CRO,RAY,SIGN,DOOD,MINA,ESP,CHIP,ETHFI"
-)
-# 티커를 몰라서 한글명으로 찾을 종목
-NAMES = ["디피니티브"]
+# OKX 주소 (앞 주소가 막히면 다음 주소로 시도)
+OKX_HOSTS = ["https://www.okx.com", "https://aws.okx.com"]
 
-# 시총 순위가 엉뚱하게 잡히면 여기에 "KRW-A": "코인게코id" 형태로 고정
+# 시총 순위가 엉뚱하게 잡히면 여기에 "OKX-A": "코인게코id" 형태로 고정
 OVERRIDE = {}
 
 KST = timezone(timedelta(hours=9))
@@ -38,27 +29,35 @@ def get(url, params=None, tries=4):
     r.raise_for_status()
 
 
-def resolve():
-    markets = get("https://api.upbit.com/v1/market/all", {"isDetails": "false"})
-    by_code = {m["market"]: m["korean_name"] for m in markets if m["market"].startswith("KRW-")}
-    by_name = {m["korean_name"]: m["market"] for m in markets if m["market"].startswith("KRW-")}
+def okx_tickers():
+    """OKX 현물 전체 시세. 막힌 주소는 건너뛰고 다음 주소로."""
+    errors = []
+    for host in OKX_HOSTS:
+        try:
+            j = get(host + "/api/v5/market/tickers", {"instType": "SPOT"})
+            if j.get("code") != "0":
+                raise RuntimeError(f"OKX 응답 오류: {j.get('code')} {j.get('msg')}")
+            return j["data"]
+        except Exception as e:
+            errors.append(f"{host} -> {e}")
+            print(f"  ! OKX 접속 실패: {host} -> {e}")
+    raise RuntimeError("OKX에 접속하지 못했습니다:\n" + "\n".join(errors))
 
-    out, missing = [], []
-    for c in CODES.split(","):
-        code = "KRW-" + c.strip()
-        if code in by_code:
-            out.append({"market": code, "name": by_code[code]})
-        else:
-            missing.append(code)
-    for n in NAMES:
-        if n in by_name:
-            print(f"[찾음] {n} -> {by_name[n]}")
-            out.append({"market": by_name[n], "name": n})
-        else:
-            missing.append(n)
-    if missing:
-        print("[확인필요] 업비트 원화마켓에 없음: " + ", ".join(missing))
-    return out
+
+def usdt_krw():
+    """업비트 테더(USDT) 원화 가격 = 환율로 사용"""
+    t = get("https://api.upbit.com/v1/ticker", {"markets": "KRW-USDT"})
+    return float(t[0]["trade_price"])
+
+
+def korean_names():
+    """업비트에 있는 코인은 한글 이름을 빌려 쓴다 (없으면 영문 기호)"""
+    try:
+        markets = get("https://api.upbit.com/v1/market/all", {"isDetails": "false"})
+        return {m["market"].split("-", 1)[1]: m["korean_name"]
+                for m in markets if m["market"].startswith("KRW-")}
+    except Exception:
+        return {}
 
 
 def slot_now():
@@ -67,46 +66,46 @@ def slot_now():
     return now.replace(minute=now.minute // 15 * 15, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M")
 
 
-def collect_volumes(coins):
+def collect_volumes():
     store = json.load(open(VOL, encoding="utf-8")) if os.path.exists(VOL) else {"coins": {}}
     slot = slot_now()
 
-    # 시세 조회는 한 번에 여러 종목을 받을 수 있어 100개씩 끊어서 요청
-    tickers, failed = {}, []
-    codes = [c["market"] for c in coins]
-    for i in range(0, len(codes), 100):
-        chunk = codes[i:i + 100]
-        try:
-            for t in get("https://api.upbit.com/v1/ticker", {"markets": ",".join(chunk)}):
-                tickers[t["market"]] = t
-        except Exception as e:
-            failed += chunk
-            print(f"  ! 조회 실패: {e}")
-        time.sleep(0.2)
+    rate = usdt_krw()
+    names = korean_names()
+    rows = [t for t in okx_tickers() if t["instId"].endswith("-USDT")]
 
-    for meta in coins:
-        code = meta["market"]
-        t = tickers.get(code)
-        if not t:
-            if code not in failed:
-                failed.append(code)
+    coins = []
+    for t in rows:
+        sym = t["instId"].split("-")[0]
+        try:
+            last = float(t["last"] or 0)
+            open24 = float(t["open24h"] or 0)
+            vol_usdt = float(t["volCcy24h"] or 0)   # 현물은 USDT 기준 거래대금
+        except ValueError:
             continue
-        entry = store["coins"].setdefault(code, {"name": meta["name"], "slots": {}})
-        entry["name"] = meta["name"]
-        entry["price"] = t["trade_price"]
-        entry["change"] = round(t.get("signed_change_rate", 0) * 100, 2)
-        # 업비트 화면의 '거래대금' = 24시간 누적 거래대금
-        entry["slots"][slot] = round(t["acc_trade_price_24h"])
+        if vol_usdt <= 0:
+            continue
+        code = "OKX-" + sym
+        name = names.get(sym, sym)
+        coins.append({"market": code, "name": name})
+
+        entry = store["coins"].setdefault(code, {"name": name, "slots": {}})
+        entry["name"] = name
+        entry["price"] = last
+        entry["change"] = round((last - open24) / open24 * 100, 2) if open24 else 0
+        entry["slots"][slot] = round(vol_usdt * rate)   # 원화로 바꿔 저장
 
     cut = (datetime.now(KST) - timedelta(days=KEEP_DAYS)).strftime("%Y-%m-%dT%H:%M")
     for e in store["coins"].values():
         e["slots"] = {k: v for k, v in e["slots"].items() if k >= cut}
 
     store["updated_at"] = datetime.now(KST).isoformat(timespec="seconds")
-    store["failed"] = failed
+    store["usdt_krw"] = rate
+    store["failed"] = []
     os.makedirs(os.path.dirname(VOL), exist_ok=True)
     json.dump(store, open(VOL, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
-    print(f"{slot} 저장 · 성공 {len(coins) - len(failed)} / 실패 {len(failed)}")
+    print(f"{slot} 저장 · OKX {len(coins)}종목 · 환율 {rate:,.0f}원")
+    return coins
 
 
 def collect_marketcap(coins):
@@ -133,16 +132,12 @@ def collect_marketcap(coins):
                 by_symbol[s] = rank
         time.sleep(2)
 
-    ranks, unknown = {}, []
+    ranks = {}
     for meta in coins:
         code = meta["market"]
         rank = by_id.get(OVERRIDE[code]) if code in OVERRIDE else by_symbol.get(code.split("-", 1)[1])
         if rank:
             ranks[code] = rank
-        else:
-            unknown.append(meta["name"])
-    if unknown:
-        print("[시총 못찾음] " + ", ".join(unknown))
 
     os.makedirs(os.path.dirname(CAP), exist_ok=True)
     json.dump({"updated_at": datetime.now(KST).isoformat(timespec="seconds"), "ranks": ranks},
@@ -151,9 +146,7 @@ def collect_marketcap(coins):
 
 
 if __name__ == "__main__":
-    coins = resolve()
-    print(f"수집 대상 {len(coins)}개")
-    collect_volumes(coins)
+    coins = collect_volumes()
     try:
         collect_marketcap(coins)
     except Exception as e:
