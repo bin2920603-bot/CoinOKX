@@ -16,6 +16,9 @@
     --down:#4D92F0;
     --flat:#5A6B7B;
     --gold:#D6B15E;
+    --s1:#E8C15A;
+    --s2:#F0963C;
+    --s3:#F2606C;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -77,6 +80,13 @@
   .empty{padding:48px 20px;max-width:34em;line-height:1.7;color:var(--text-dim)}
   .empty strong{display:block;color:var(--text);font-size:15px;margin-bottom:8px}
   code{background:var(--ink-2);border:1px solid var(--rule);border-radius:3px;padding:1px 5px;color:var(--text)}
+  .surge-badge{display:inline-block;margin-left:5px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;vertical-align:middle}
+  .surge-1{background:rgba(232,193,90,.18);color:var(--s1);box-shadow:inset 0 0 0 1px rgba(232,193,90,.4)}
+  .surge-2{background:rgba(240,150,60,.2);color:var(--s2);box-shadow:inset 0 0 0 1px rgba(240,150,60,.45)}
+  .surge-3{background:rgba(242,96,108,.22);color:var(--s3);box-shadow:inset 0 0 0 1px rgba(242,96,108,.5)}
+  tr.surge-row-1 td.coin{box-shadow:inset 3px 0 0 var(--s1)}
+  tr.surge-row-2 td.coin{box-shadow:inset 3px 0 0 var(--s2)}
+  tr.surge-row-3 td.coin{box-shadow:inset 3px 0 0 var(--s3)}
 </style>
 </head>
 <body>
@@ -111,7 +121,7 @@ const KRW = v => {
 };
 const hhmm = s => s.slice(11, 16);
 
-let store = null, caps = {};
+let store = null, caps = {}, surges = {};
 
 async function load() {
   const bust = "?t=" + Date.now();
@@ -131,6 +141,10 @@ async function load() {
     const r2 = await fetch("data/marketcap.json" + bust, {cache: "no-store"});
     if (r2.ok) caps = (await r2.json()).ranks || {};
   } catch (e) { caps = {}; }
+  try {
+    const r3 = await fetch("data/surge.json" + bust, {cache: "no-store"});
+    if (r3.ok) surges = (await r3.json()).surges || {};
+  } catch (e) { surges = {}; }
   render();
 }
 
@@ -149,7 +163,8 @@ function render() {
     sym: market.split("-")[1],
     rank: caps[market] ?? 99999,
     slots: c.slots || {},
-    latest: c.slots?.[slots[0]] ?? 0
+    latest: c.slots?.[slots[0]] ?? 0,
+    surge: surges[market] || null
   }));
 
   rows.sort((a, b) => mode === "cap" ? a.rank - b.rank || a.name.localeCompare(b.name)
@@ -170,17 +185,23 @@ function render() {
     }).join("");
     const rank = r.rank === 99999 ? "–" : r.rank;
     const url = `https://www.okx.com/trade-swap/${r.sym.toLowerCase()}-usdt-swap`;
-    return `<tr><td class="rank">${rank}</td><td class="coin">` +
+    const rowClass = r.surge ? ` class="surge-row-${r.surge.level}"` : "";
+    const badge = r.surge
+      ? `<span class="surge-badge surge-${r.surge.level}">🔥${r.surge.pct}%</span>`
+      : "";
+    return `<tr${rowClass}><td class="rank">${rank}</td><td class="coin">` +
            `<a href="${url}" target="_blank" rel="noopener">${r.name}</a>` +
-           `<span class="sym">${r.sym}</span></td>${cells}</tr>`;
+           `<span class="sym">${r.sym}</span>${badge}</td>${cells}</tr>`;
   }).join("");
 
   document.getElementById("scroll").innerHTML =
     `<table><thead>${head.join("")}</thead><tbody>${body}</tbody></table>`;
 
   const failed = (store.failed || []).length;
+  const surgeCount = Object.keys(surges).length;
   document.getElementById("meta").innerHTML =
     `<b>${rows.length}종목</b> · 단위 억원 · 갱신 ${store.updated_at ? store.updated_at.slice(5, 16).replace("T", " ") : "–"}` +
+    (surgeCount ? ` · <b>급등 ${surgeCount}종목</b>` : "") +
     (failed ? ` · <b>${failed}종목 수집 실패</b>` : "");
 }
 
