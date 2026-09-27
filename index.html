@@ -207,10 +207,10 @@ function render() {
     const cells = slots.map((s, i) => {
       const v = r.slots[s];
       if (v == null) return '<td class="v none">·</td>';
-      const p = r.prices[s];
-      const pPrev = r.prices[slots[i + 1]];        // 한 칸 오른쪽 = 직전 구간
+      const prev = r.slots[slots[i + 1]];          // 한 칸 오른쪽 = 직전 구간
       let cls = "flat";
-      if (p != null && pPrev != null) cls = p > pPrev ? "up" : p < pPrev ? "down" : "flat";
+      if (prev != null) cls = v > prev ? "up" : v < prev ? "down" : "flat";
+      const p = r.prices[s];
       const px = p != null ? `<span class="px">${PX(p)}</span>` : "";
       return `<td class="v ${cls}">${KRW(v)}${px}</td>`;
     }).join("");
