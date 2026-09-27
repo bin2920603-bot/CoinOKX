@@ -59,7 +59,8 @@
 
   .scroll{overflow:auto;height:calc(100% - 52px);}
   table{border-collapse:separate;border-spacing:0;white-space:nowrap}
-  th,td{padding:0 10px;height:30px;border-bottom:1px solid var(--rule-soft)}
+  th,td{padding:0 10px;height:38px;border-bottom:1px solid var(--rule-soft);vertical-align:middle}
+  thead th{height:30px}
   thead th{
     position:sticky;top:0;z-index:3;background:var(--ink-2);
     border-bottom:1px solid var(--rule);
@@ -79,7 +80,8 @@
   td.coin a{color:var(--text);text-decoration:none}
   td.coin a:hover,td.coin a:focus-visible{color:var(--gold);text-decoration:underline}
   td.coin .sym{color:var(--text-dim);font-size:11px;margin-left:5px}
-  td.v{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px}
+  td.v{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;line-height:1.35;padding-top:3px;padding-bottom:3px}
+  td.v .px{display:block;font-size:9.5px;font-weight:400;opacity:.72;font-variant-numeric:tabular-nums}
   .up{color:var(--up)}
   .down{color:var(--down)}
   .flat{color:var(--flat)}
@@ -134,6 +136,13 @@ const KRW = v => {
   return e.toFixed(2);
 };
 const hhmm = s => s.slice(11, 16);
+const PX = v => {
+  if (v == null) return "";
+  if (v >= 1000) return v.toLocaleString(undefined, {maximumFractionDigits: 0});
+  if (v >= 1)    return v.toFixed(2);
+  if (v >= 0.01) return v.toFixed(4);
+  return v.toPrecision(3);
+};
 
 let store = null, caps = {}, surges = {};
 
@@ -177,6 +186,7 @@ function render() {
     sym: market.split("-")[1],
     rank: caps[market] ?? 99999,
     slots: c.slots || {},
+    prices: c.prices || {},
     latest: c.slots?.[slots[0]] ?? 0,
     surge: surges[market] || null
   }));
@@ -197,10 +207,12 @@ function render() {
     const cells = slots.map((s, i) => {
       const v = r.slots[s];
       if (v == null) return '<td class="v none">·</td>';
-      const prev = r.slots[slots[i + 1]];          // 한 칸 오른쪽 = 직전 구간
+      const p = r.prices[s];
+      const pPrev = r.prices[slots[i + 1]];        // 한 칸 오른쪽 = 직전 구간
       let cls = "flat";
-      if (prev != null) cls = v > prev ? "up" : v < prev ? "down" : "flat";
-      return `<td class="v ${cls}">${KRW(v)}</td>`;
+      if (p != null && pPrev != null) cls = p > pPrev ? "up" : p < pPrev ? "down" : "flat";
+      const px = p != null ? `<span class="px">${PX(p)}</span>` : "";
+      return `<td class="v ${cls}">${KRW(v)}${px}</td>`;
     }).join("");
     const rank = r.rank === 99999 ? "–" : r.rank;
     const url = `https://www.okx.com/trade-swap/${r.sym.toLowerCase()}-usdt-swap`;
@@ -222,7 +234,7 @@ function render() {
   const surgeCount = Object.keys(surges).length;
   document.getElementById("meta").innerHTML =
     (q ? `<b>${visRows.length}/${rows.length}종목</b>` : `<b>${rows.length}종목</b>`) +
-    ` · 단위 억원 · 갱신 ${store.updated_at ? store.updated_at.slice(5, 16).replace("T", " ") : "–"}` +
+    ` · 단위 억원(작은 글씨=가격, 빨강 상승/파랑 하락) · 갱신 ${store.updated_at ? store.updated_at.slice(5, 16).replace("T", " ") : "–"}` +
     (surgeCount ? ` · <b>급등 ${surgeCount}종목</b>` : "") +
     (failed ? ` · <b>${failed}종목 수집 실패</b>` : "");
 }
