@@ -46,6 +46,16 @@
     border-radius:3px;padding:5px 8px;font:inherit;font-size:12px;
   }
   select:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+  .search-wrap{position:relative;display:flex;align-items:center}
+  .search-wrap svg{position:absolute;left:8px;width:13px;height:13px;color:var(--text-dim);pointer-events:none}
+  #q{
+    background:var(--ink-2);color:var(--text);border:1px solid var(--rule);
+    border-radius:3px;padding:5px 8px 5px 26px;font:inherit;font-size:12px;width:140px;
+  }
+  #q::placeholder{color:var(--text-dim)}
+  #q:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+  tr.hit td.coin{box-shadow:inset 3px 0 0 var(--gold)}
+  tr.hit td.coin a{color:var(--gold)}
 
   .scroll{overflow:auto;height:calc(100% - 52px);}
   table{border-collapse:separate;border-spacing:0;white-space:nowrap}
@@ -94,6 +104,10 @@
   <h1>15분 거래대금 장부 <span>OKX 선물</span></h1>
   <div class="meta" id="meta">불러오는 중</div>
   <div class="controls">
+    <span class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="q" placeholder="코인명/심볼 검색" aria-label="코인 검색">
+    </span>
     <select id="span" aria-label="표시 구간">
       <option value="16">4시간</option>
       <option value="24" selected>6시간</option>
@@ -170,11 +184,16 @@ function render() {
   rows.sort((a, b) => mode === "cap" ? a.rank - b.rank || a.name.localeCompare(b.name)
                                      : b.latest - a.latest);
 
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const visRows = q
+    ? rows.filter(r => r.name.toLowerCase().includes(q) || r.sym.toLowerCase().includes(q))
+    : rows;
+
   const head = ['<tr><th class="rank">시총</th><th class="coin">코인</th>'];
   slots.forEach((s, i) => head.push(`<th class="${i === 0 ? "now" : ""}">${hhmm(s)}</th>`));
   head.push("</tr>");
 
-  const body = rows.map(r => {
+  const body = visRows.map(r => {
     const cells = slots.map((s, i) => {
       const v = r.slots[s];
       if (v == null) return '<td class="v none">·</td>';
@@ -185,7 +204,8 @@ function render() {
     }).join("");
     const rank = r.rank === 99999 ? "–" : r.rank;
     const url = `https://www.okx.com/trade-swap/${r.sym.toLowerCase()}-usdt-swap`;
-    const rowClass = r.surge ? ` class="surge-row-${r.surge.level}"` : "";
+    const cls = [q ? "hit" : "", r.surge ? `surge-row-${r.surge.level}` : ""].filter(Boolean).join(" ");
+    const rowClass = cls ? ` class="${cls}"` : "";
     const badge = r.surge
       ? `<span class="surge-badge surge-${r.surge.level}">🔥${r.surge.pct}%</span>`
       : "";
@@ -194,19 +214,22 @@ function render() {
            `<span class="sym">${r.sym}</span>${badge}</td>${cells}</tr>`;
   }).join("");
 
-  document.getElementById("scroll").innerHTML =
-    `<table><thead>${head.join("")}</thead><tbody>${body}</tbody></table>`;
+  document.getElementById("scroll").innerHTML = visRows.length
+    ? `<table><thead>${head.join("")}</thead><tbody>${body}</tbody></table>`
+    : `<div class="empty"><strong>검색 결과 없음</strong>"${q}"와(과) 일치하는 코인이 없습니다.</div>`;
 
   const failed = (store.failed || []).length;
   const surgeCount = Object.keys(surges).length;
   document.getElementById("meta").innerHTML =
-    `<b>${rows.length}종목</b> · 단위 억원 · 갱신 ${store.updated_at ? store.updated_at.slice(5, 16).replace("T", " ") : "–"}` +
+    (q ? `<b>${visRows.length}/${rows.length}종목</b>` : `<b>${rows.length}종목</b>`) +
+    ` · 단위 억원 · 갱신 ${store.updated_at ? store.updated_at.slice(5, 16).replace("T", " ") : "–"}` +
     (surgeCount ? ` · <b>급등 ${surgeCount}종목</b>` : "") +
     (failed ? ` · <b>${failed}종목 수집 실패</b>` : "");
 }
 
 document.getElementById("span").addEventListener("change", render);
 document.getElementById("sort").addEventListener("change", render);
+document.getElementById("q").addEventListener("input", render);
 load();
 setInterval(load, 60000);
 </script>
