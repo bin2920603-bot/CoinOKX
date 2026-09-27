@@ -58,20 +58,22 @@ def level(pct):
 
 
 def check():
-    prices = {}
+    # price: 현재가, acc: 24시간 누적 거래대금(volCcy24h, 롤링) → 두 시점 차이로 최근 거래대금 흐름을 계산
+    snap = {}
     for t in okx_tickers():
         if not t["instId"].endswith("-USDT-SWAP"):
             continue
         try:
             last = float(t["last"] or 0)
+            acc = float(t.get("volCcy24h") or 0)
         except ValueError:
             continue
         if last <= 0:
             continue
         sym = t["instId"].split("-")[0]
-        prices["OKX-" + sym] = last
+        snap["OKX-" + sym] = {"price": last, "acc": acc}
 
-    last = json.load(open(LAST, encoding="utf-8")) if os.path.exists(LAST) else {}
+    last_raw = json.load(open(LAST, encoding="utf-8")) if os.path.exists(LAST) else {}
 
     prev = {"active": {}}
     if os.path.exists(SURGE):
@@ -89,25 +91,60 @@ def check():
     active = {k: v for k, v in prev_active.items() if v.get("time", "") >= cut}
 
     new_count = 0
-    for code, price in prices.items():
-        prevp = last.get(code)
-        if prevp:
-            pct = (price - prevp) / prevp * 100
-            lv = level(pct)
-            if lv:
-                active[code] = {"level": lv, "pct": round(pct, 1), "time": now_s}
-                new_count += 1
+    for code, cur in snap.items():
+        price = cur["price"]
+        acc = cur["acc"]
+        prevd = last_raw.get(code)
+        if not isinstance(prevd, dict):
+            continue  # 첫 수집이거나 이전 포맷이면 이번 회차는 기준값만 쌓고 넘어감
+        prevp = prevd.get("price")
+        preva = prevd.get("acc")
+        if not prevp:
+            continue
 
-    surges = {k: {"level": v["level"], "pct": v["pct"]} for k, v in active.items()}
+        pct = (price - prevp) / prevp * 100
+        vol_diff = acc - preva if preva is not None else 0
+        vol5 = vol_diff if vol_diff > 0 else 0
+        lv = level(pct)
+
+        if code in active:
+            # 이미 표시 중인 급등: 고점·거래량 유지 여부만 계속 갱신
+            entry = active[code]
+            peak = max(entry.get("peak", price), price)
+            base_vol = entry.get("base_vol") or 1
+            ratio = vol5 / base_vol
+            vol_status = "유지" if ratio >= 0.5 else ("감소" if ratio >= 0.2 else "급감")
+            pullback = round((price - peak) / peak * 100, 1) if peak else 0.0
+            entry.update({"peak": peak, "pullback": pullback, "vol_status": vol_status})
+            if lv and lv >= entry.get("level", 0):
+                entry.update({"level": lv, "pct": round(pct, 1), "time": now_s})
+        elif lv:
+            active[code] = {
+                "level": lv, "pct": round(pct, 1), "time": now_s,
+                "peak": price, "base_vol": vol5 if vol5 > 0 else 1,
+                "pullback": 0.0, "vol_status": "유지",
+            }
+            new_count += 1
+
+    surges = {
+        k: {
+            "level": v["level"], "pct": v["pct"],
+            "pullback": v.get("pullback", 0.0), "vol_status": v.get("vol_status", "유지"),
+        }
+        for k, v in active.items()
+    }
 
     os.makedirs(os.path.dirname(SURGE), exist_ok=True)
     json.dump(
         {"surges": surges, "active": active, "updated_at": now_s},
         open(SURGE, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":")
     )
-    json.dump(prices, open(LAST, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    json.dump(
+        {code: {"price": v["price"], "acc": v["acc"]} for code, v in snap.items()},
+        open(LAST, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":")
+    )
 
-    print(f"{now_s} 급등체크 · {len(prices)}종목 조회 · 신규 {new_count}건 · 표시중 {len(surges)}건")
+    print(f"{now_s} 급등체크 · {len(snap)}종목 조회 · 신규 {new_count}건 · 표시중 {len(surges)}건")
 
 
 if __name__ == "__main__":
