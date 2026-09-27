@@ -99,6 +99,11 @@
   tr.surge-row-1 td.coin{box-shadow:inset 3px 0 0 var(--s1)}
   tr.surge-row-2 td.coin{box-shadow:inset 3px 0 0 var(--s2)}
   tr.surge-row-3 td.coin{box-shadow:inset 3px 0 0 var(--s3)}
+  .surge-sub{display:inline-block;margin-left:4px;font-size:9.5px;font-weight:600;padding:1px 4px;border-radius:3px;vertical-align:middle}
+  .pullback{background:rgba(90,160,232,.16);color:#5aa0e8;box-shadow:inset 0 0 0 1px rgba(90,160,232,.35)}
+  .vol-ok{background:rgba(90,200,120,.16);color:#5ac878;box-shadow:inset 0 0 0 1px rgba(90,200,120,.35)}
+  .vol-down{background:rgba(240,150,60,.18);color:#f0963c;box-shadow:inset 0 0 0 1px rgba(240,150,60,.4)}
+  .vol-bad{background:rgba(242,96,108,.2);color:#f2606c;box-shadow:inset 0 0 0 1px rgba(242,96,108,.45)}
 </style>
 </head>
 <body>
@@ -218,9 +223,17 @@ function render() {
     const url = `https://www.okx.com/trade-swap/${r.sym.toLowerCase()}-usdt-swap`;
     const cls = [q ? "hit" : "", r.surge ? `surge-row-${r.surge.level}` : ""].filter(Boolean).join(" ");
     const rowClass = cls ? ` class="${cls}"` : "";
-    const badge = r.surge
-      ? `<span class="surge-badge surge-${r.surge.level}">🔥${r.surge.pct}%</span>`
-      : "";
+    let badge = "";
+    if (r.surge) {
+      badge = `<span class="surge-badge surge-${r.surge.level}">🔥${r.surge.pct}%</span>`;
+      if (r.surge.pullback != null && r.surge.pullback <= -1) {
+        badge += `<span class="surge-sub pullback">고점대비${r.surge.pullback}%</span>`;
+      }
+      if (r.surge.vol_status) {
+        const vcls = r.surge.vol_status === "유지" ? "vol-ok" : r.surge.vol_status === "감소" ? "vol-down" : "vol-bad";
+        badge += `<span class="surge-sub ${vcls}">거래량${r.surge.vol_status}</span>`;
+      }
+    }
     return `<tr${rowClass}><td class="rank">${rank}</td><td class="coin">` +
            `<a href="${url}" target="_blank" rel="noopener">${r.name}</a>` +
            `<span class="sym">${r.sym}</span>${badge}</td>${cells}</tr>`;
