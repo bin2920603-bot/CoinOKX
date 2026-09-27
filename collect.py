@@ -90,15 +90,18 @@ def collect_volumes():
         name = names.get(sym, sym)
         coins.append({"market": code, "name": name})
 
-        entry = store["coins"].setdefault(code, {"name": name, "slots": {}})
+        entry = store["coins"].setdefault(code, {"name": name, "slots": {}, "prices": {}})
+        entry.setdefault("prices", {})
         entry["name"] = name
         entry["price"] = last
         entry["change"] = round((last - open24) / open24 * 100, 2) if open24 else 0
         entry["slots"][slot] = round(vol_usdt * rate)   # 원화로 바꿔 저장
+        entry["prices"][slot] = last                    # 그 시각의 가격(USDT)도 같이 저장
 
     cut = (datetime.now(KST) - timedelta(days=KEEP_DAYS)).strftime("%Y-%m-%dT%H:%M")
     for e in store["coins"].values():
         e["slots"] = {k: v for k, v in e["slots"].items() if k >= cut}
+        e["prices"] = {k: v for k, v in e.get("prices", {}).items() if k >= cut}
 
     store["updated_at"] = datetime.now(KST).isoformat(timespec="seconds")
     store["usdt_krw"] = rate
