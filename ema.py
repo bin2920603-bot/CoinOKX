@@ -61,4 +61,36 @@ def classify(closes_old_to_new):
     e60 = ema(closes_old_to_new, 60)
     e120 = ema(closes_old_to_new, 120)
     if e5 > e20 > e60 > e120:
-        return "u
+        return "up"
+    if e5 < e20 < e60 < e120:
+        return "down"
+    return None
+
+
+def main():
+    coins = list(json.load(open(VOL, encoding="utf-8"))["coins"].keys())
+    trend, fail = {}, 0
+    for code in coins:
+        sym = code.split("-", 1)[1]
+        if sym.upper() in STABLE:
+            continue
+        try:
+            c = get("/api/v5/market/candles", {"instId": f"{sym}-USDT-SWAP", "bar": "1D", "limit": "300"})
+            closes = [float(x[4]) for x in reversed(c)]
+            t = classify(closes)
+            if t:
+                trend[code] = t
+        except Exception as e:
+            fail += 1
+            print(f"  ! {sym}: {e}")
+        time.sleep(0.12)
+
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    json.dump({"updated_at": datetime.now(KST).isoformat(timespec="seconds"), "trend": trend},
+              open(OUT, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    up = sum(1 for v in trend.values() if v == "up")
+    print(f"EMA 정배열 {up} · 역배열 {len(trend) - up} · 실패 {fail} / 전체 {len(coins)}")
+
+
+if __name__ == "__main__":
+    main()
