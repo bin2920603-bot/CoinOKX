@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""OKX 선물 5분봉 EMA(7·20·50·200)+VWAP100 정배열/역배열 + 'EMA7이 EMA20을 막 넘은' 종목(조건 강화)을 data/ema5.json 에 저장한다."""
+"""OKX 선물 5분봉 EMA(7·20·50·200)+VWAP100 정배열/역배열/early + 거래대금 급증(hot)을 data/ema5.json 에 저장한다."""
 import json, os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from ema import get, ema, STABLE, VOL, KST
 
 OUT = os.path.join(os.path.dirname(VOL), "ema5.json")
 CROSS_LOOKBACK = 3   # 최근 5분봉 3개(15분) 안에 넘었으면 early 후보
-MIN_GAP = 0.0005     # EMA7이 EMA20보다 최소 0.05% 위에 있어야 함 (너무 붙어 있으면 제외)
+MIN_GAP = 0.0005     # EMA7이 EMA20보다 최소 0.05% 위에 있어야 함
 SLOPE_BARS = 3       # EMA20이 3개 봉 전보다 올라와 있어야 함
+HOT_RISE = 0.02      # 24시간 거래대금이 직전 칸보다 2% 이상 늘면 hot
+MIN_TURNOVER = 10_000_000_000   # 24시간 거래대금 100억원 미만 종목은 제외(원 단위)
 
 
 def vwap(highs, lows, closes, vols, n=100):
@@ -31,22 +33,17 @@ def classify5(highs, lows, closes, vols):
         return None
     last = closes[-1]
 
-    # 1) 이미 완성된 배열
     if e7 > e20 > e50 > e200 and last > vw:
         return "up"
     if e7 < e20 < e50 < e200 and last < vw:
         return "down"
 
-    # 2) 막 넘은 종목 (조건 강화)
     if e7 > e20 and last > vw and last > e50:
-        # EMA7이 EMA20보다 충분히 위에 있어야 함
         if (e7 - e20) / e20 < MIN_GAP:
             return None
-        # EMA20이 올라오는 중이어야 함
         e20_prev = ema(closes[:-SLOPE_BARS], 20)
         if e20 <= e20_prev:
             return None
-        # 최근 15분 안에 실제로 넘었는지 확인
         for k in range(1, CROSS_LOOKBACK + 1):
             past = closes[:-k]
             if len(past) < 201:
@@ -54,6 +51,33 @@ def classify5(highs, lows, closes, vols):
             if ema(past, 7) <= ema(past, 20):
                 return "early"
     return None
+
+
+def hot_coins(store):
+    """직전 15분 칸보다 24시간 거래대금이 HOT_RISE 이상 늘어난 종목 {코드: 증가율%}"""
+    hot = {}
+    now = datetime.now(KST)
+    for code, e in store.get("coins", {}).items():
+        sym = code.split("-", 1)[1]
+        if sym.upper() in STABLE:
+            continue
+        slots = e.get("slots", {})
+        if len(slots) < 2:
+            continue
+        keys = sorted(slots)
+        try:
+            last_t = datetime.strptime(keys[-1], "%Y-%m-%dT%H:%M").replace(tzinfo=KST)
+        except ValueError:
+            continue
+        if now - last_t > timedelta(minutes=45):
+            continue   # 데이터가 오래됐으면 건너뜀
+        cur, prev = slots[keys[-1]], slots[keys[-2]]
+        if prev <= 0 or prev < MIN_TURNOVER:
+            continue
+        rise = (cur - prev) / prev
+        if rise >= HOT_RISE:
+            hot[code] = round(rise * 100, 1)
+    return hot
 
 
 def check(code):
@@ -74,19 +98,21 @@ def check(code):
 
 
 def main():
-    coins = list(json.load(open(VOL, encoding="utf-8"))["coins"].keys())
+    store = json.load(open(VOL, encoding="utf-8"))
+    coins = list(store["coins"].keys())
+    hot = hot_coins(store)
     trend, fail = {}, 0
     with ThreadPoolExecutor(max_workers=4) as ex:
         for code, t, failed in ex.map(check, coins):
             fail += failed
             if t:
                 trend[code] = t
-    json.dump({"updated_at": datetime.now(KST).isoformat(timespec="seconds"), "trend": trend},
+    json.dump({"updated_at": datetime.now(KST).isoformat(timespec="seconds"), "trend": trend, "hot": hot},
               open(OUT, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     up = sum(1 for v in trend.values() if v == "up")
     down = sum(1 for v in trend.values() if v == "down")
     early = sum(1 for v in trend.values() if v == "early")
-    print(f"5분봉 정배열 {up} · 역배열 {down} · 넘는중 {early} · 실패 {fail} / 전체 {len(coins)}")
+    print(f"5분봉 정배열 {up} · 역배열 {down} · 넘는중 {early} · 거래대금급증 {len(hot)} · 실패 {fail} / 전체 {len(coins)}")
 
 
 if __name__ == "__main__":
