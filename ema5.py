@@ -1,11 +1,37 @@
-#!/usr/bin/env python3
-"""OKX 선물 5분봉 EMA(5·20·60·120) 정배열/역배열 종목을 data/ema5.json 에 저장한다."""
+ #!/usr/bin/env python3
+"""OKX 선물 5분봉 EMA(7·20·50·200)+VWAP100 정배열/역배열 종목을 data/ema5.json 에 저장한다."""
 import json, os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from ema import get, classify, STABLE, VOL, KST
+from ema import get, ema, STABLE, VOL, KST
 
 OUT = os.path.join(os.path.dirname(VOL), "ema5.json")
+
+
+def vwap(highs, lows, closes, vols, n=100):
+    h, l, c, v = highs[-n:], lows[-n:], closes[-n:], vols[-n:]
+    total = sum(v)
+    if total == 0:
+        return None
+    return sum((h[i] + l[i] + c[i]) / 3 * v[i] for i in range(len(v))) / total
+
+
+def classify5(highs, lows, closes, vols):
+    if len(closes) < 201:
+        return None
+    e7 = ema(closes, 7)
+    e20 = ema(closes, 20)
+    e50 = ema(closes, 50)
+    e200 = ema(closes, 200)
+    vw = vwap(highs, lows, closes, vols, 100)
+    if vw is None:
+        return None
+    last = closes[-1]
+    if e7 > e20 > e50 > e200 and last > vw:
+        return "up"
+    if e7 < e20 < e50 < e200 and last < vw:
+        return "down"
+    return None
 
 
 def check(code):
@@ -14,8 +40,12 @@ def check(code):
         return code, None, False
     try:
         c = get("/api/v5/market/candles", {"instId": f"{sym}-USDT-SWAP", "bar": "5m", "limit": "300"})
-        closes = [float(x[4]) for x in reversed(c)]
-        return code, classify(closes), False
+        c = list(reversed(c))
+        highs = [float(x[2]) for x in c]
+        lows = [float(x[3]) for x in c]
+        closes = [float(x[4]) for x in c]
+        vols = [float(x[5]) for x in c]
+        return code, classify5(highs, lows, closes, vols), False
     except Exception as e:
         print(f"  ! {sym}: {e}")
         return code, None, True
