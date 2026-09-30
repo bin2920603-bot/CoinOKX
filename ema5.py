@@ -7,8 +7,8 @@ from ema import get, ema, STABLE, VOL, KST
 
 OUT = os.path.join(os.path.dirname(VOL), "ema5.json")
 CROSS_LOOKBACK = 6   # 최근 5분봉 3개(15분) 안에 넘었으면 early 후보
-MIN_GAP = 0.0005     # EMA7이 EMA20보다 최소 0.05% 위에 있어야 함
-SLOPE_BARS = 3       # EMA20이 3개 봉 전보다 올라와 있어야 함
+MIN_GAP = 0.0002     # EMA7이 EMA20보다 최소 0.05% 위에 있어야 함
+SLOPE_BARS = 2       # EMA20이 3개 봉 전보다 올라와 있어야 함
 HOT_RISE = 0.02      # 24시간 거래대금이 직전 칸보다 최소 2%는 늘어야 hot 후보
 HOT_OVER = 0.05      # 그리고 시장 전체 중앙값보다 5%p 이상 더 늘어야 hot
 MIN_TURNOVER = 10_000_000_000   # 24시간 거래대금 100억원 미만 종목은 제외(원 단위)
