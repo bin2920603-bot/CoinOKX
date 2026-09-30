@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from ema import get, ema, STABLE, VOL, KST
 
 OUT = os.path.join(os.path.dirname(VOL), "ema5.json")
-CROSS_LOOKBACK = 3   # 최근 5분봉 3개(15분) 안에 넘었으면 early 후보
+CROSS_LOOKBACK = 6   # 최근 5분봉 3개(15분) 안에 넘었으면 early 후보
 MIN_GAP = 0.0005     # EMA7이 EMA20보다 최소 0.05% 위에 있어야 함
 SLOPE_BARS = 3       # EMA20이 3개 봉 전보다 올라와 있어야 함
 HOT_RISE = 0.02      # 24시간 거래대금이 직전 칸보다 최소 2%는 늘어야 hot 후보
