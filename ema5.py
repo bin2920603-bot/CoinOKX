@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""OKX 선물 5분봉 EMA(7·20·50·200)+VWAP100 정배열/역배열 + 'EMA7이 EMA20을 막 넘은' 종목을 data/ema5.json 에 저장한다."""
+"""OKX 선물 5분봉 EMA(7·20·50·200)+VWAP100 정배열/역배열 + 'EMA7이 EMA20을 막 넘은' 종목(조건 강화)을 data/ema5.json 에 저장한다."""
 import json, os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from ema import get, ema, STABLE, VOL, KST
 
 OUT = os.path.join(os.path.dirname(VOL), "ema5.json")
-CROSS_LOOKBACK = 3  # 최근 5분봉 3개(15분) 안에 넘었으면 early
+CROSS_LOOKBACK = 3   # 최근 5분봉 3개(15분) 안에 넘었으면 early 후보
+MIN_GAP = 0.0005     # EMA7이 EMA20보다 최소 0.05% 위에 있어야 함 (너무 붙어 있으면 제외)
+SLOPE_BARS = 3       # EMA20이 3개 봉 전보다 올라와 있어야 함
 
 
 def vwap(highs, lows, closes, vols, n=100):
@@ -35,8 +37,16 @@ def classify5(highs, lows, closes, vols):
     if e7 < e20 < e50 < e200 and last < vw:
         return "down"
 
-    # 2) 막 넘은 종목: 지금은 7이 20 위인데, 최근 3개 봉 중에는 7이 20 아래였던 때가 있음
-    if e7 > e20 and last > vw:
+    # 2) 막 넘은 종목 (조건 강화)
+    if e7 > e20 and last > vw and last > e50:
+        # EMA7이 EMA20보다 충분히 위에 있어야 함
+        if (e7 - e20) / e20 < MIN_GAP:
+            return None
+        # EMA20이 올라오는 중이어야 함
+        e20_prev = ema(closes[:-SLOPE_BARS], 20)
+        if e20 <= e20_prev:
+            return None
+        # 최근 15분 안에 실제로 넘었는지 확인
         for k in range(1, CROSS_LOOKBACK + 1):
             past = closes[:-k]
             if len(past) < 201:
