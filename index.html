@@ -182,22 +182,24 @@ window.addEventListener("resize", setStickyW);
 // ==== 급등·급락 감지(화면에서 직접, 1분마다) 시작 ====
 // 서버(GitHub)는 자동 실행이 자주 밀려서, 화면이 열려 있는 동안 직접 가격 변화를 본다.
 // 5%부터 표시, 5~10% / 10~20% / 20%~ 세 단계. 오르면 급등(🔥), 내리면 급락(📉).
-const SURGE_WIN = 5 * 60e3;     // 약 5분 전 가격과 비교
+const SURGE_WIN = 5 * 60e3;     // 약 5분 전 가격과 비교 (15분 칸 가격들과도 같이 비교)
 const SURGE_KEEP = 20 * 60e3;   // 배지를 20분 유지
 let hist = [];                  // 1분마다 찍은 가격/거래대금 기록
 let bActive = {};               // 화면에서 잡은 급등·급락 종목
 
 function surgeLevel(pct) { return pct >= 20 ? 3 : pct >= 10 ? 2 : pct >= 5 ? 1 : 0; }
 
-// 기록이 아직 없을 때(화면을 막 열었을 때)는 15분 칸에 저장된 가격과 비교
-function slotBase(sym) {
+// 15분 칸에 저장된 최근 가격들(최대 40분 전까지). 천천히 떨어지거나 오른 움직임도 잡기 위해 같이 비교한다.
+// 화면을 막 열었을 때도 바로 비교할 수 있다.
+function slotPrices(sym) {
   const c = store && store.coins && store.coins["OKX-" + sym];
-  if (!c || !c.prices) return null;
-  const keys = Object.keys(c.prices).sort();
-  if (!keys.length) return null;
-  const k = keys[keys.length - 1];
-  const age = Date.now() - Date.parse(k + ":00+09:00");
-  return age <= 20 * 60e3 ? c.prices[k] : null;
+  if (!c || !c.prices) return [];
+  const out = [];
+  for (const k of Object.keys(c.prices).sort().slice(-3)) {
+    const age = Date.now() - Date.parse(k + ":00+09:00");
+    if (age <= 40 * 60e3 && c.prices[k] > 0) out.push(c.prices[k]);
+  }
+  return out;
 }
 
 function surgeStep(now, snap) {
@@ -211,9 +213,15 @@ function surgeStep(now, snap) {
   for (const [sym, cur] of Object.entries(snap)) {
     const price = cur[0], acc = cur[1];
     const r = ref ? ref.d[sym] : null;
-    const bp = r ? r[0] : slotBase(sym);
-    if (!bp) continue;
-    const pct = (price / bp - 1) * 100;
+    // 비교 기준 가격: 약 5분 전(화면 기록) + 15분 칸 가격들. 그중 가장 크게 움직인 값을 쓴다.
+    const cands = r ? [r[0]] : [];
+    for (const p of slotPrices(sym)) cands.push(p);
+    let pct = null;
+    for (const c of cands) {
+      const x = (price / c - 1) * 100;
+      if (pct === null || Math.abs(x) > Math.abs(pct)) pct = x;
+    }
+    if (pct === null) continue;
     const volDiff = r ? Math.max(acc - r[1], 0) : null;
     const dir = pct >= 0 ? "up" : "down";
     const lv = surgeLevel(Math.abs(pct));
