@@ -181,13 +181,13 @@ window.addEventListener("resize", setStickyW);
 
 // ==== 급등·급락 감지(화면에서 직접, 1분마다) 시작 ====
 // 서버(GitHub)는 자동 실행이 자주 밀려서, 화면이 열려 있는 동안 직접 가격 변화를 본다.
-// 10%부터 표시, 10~20% / 20~50% / 50%~ 세 단계. 오르면 급등(🔥), 내리면 급락(📉).
+// 5%부터 표시, 5~10% / 10~20% / 20%~ 세 단계. 오르면 급등(🔥), 내리면 급락(📉).
 const SURGE_WIN = 5 * 60e3;     // 약 5분 전 가격과 비교
 const SURGE_KEEP = 20 * 60e3;   // 배지를 20분 유지
 let hist = [];                  // 1분마다 찍은 가격/거래대금 기록
 let bActive = {};               // 화면에서 잡은 급등·급락 종목
 
-function surgeLevel(pct) { return pct >= 50 ? 3 : pct >= 20 ? 2 : pct >= 10 ? 1 : 0; }
+function surgeLevel(pct) { return pct >= 20 ? 3 : pct >= 10 ? 2 : pct >= 5 ? 1 : 0; }
 
 // 기록이 아직 없을 때(화면을 막 열었을 때)는 15분 칸에 저장된 가격과 비교
 function slotBase(sym) {
