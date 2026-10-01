@@ -138,6 +138,7 @@
       <option value="cap" selected>시총순</option>
       <option value="vol">거래대금순</option>
       <option value="chg">전일대비순</option>
+      <option value="surge">급등·급락순</option>
     </select>
   </div>
 </header>
@@ -312,8 +313,10 @@ function render() {
   }));
 
   const cOf = r => { const v = chg[r.sym + "-USDT-SWAP"]; return v == null ? -Infinity : v; };
+  const sOf = r => r.surge ? Math.abs(r.surge.pct) : -1;   // 급등·급락 종목은 변동폭, 나머지는 -1
   rows.sort((a, b) => mode === "cap" ? a.rank - b.rank || a.name.localeCompare(b.name)
                     : mode === "chg" ? (cOf(b) > cOf(a) ? 1 : cOf(b) < cOf(a) ? -1 : 0)
+                    : mode === "surge" ? (sOf(b) - sOf(a) || b.latest - a.latest)
                                      : b.latest - a.latest);
 
   const q = document.getElementById("q").value.trim().toLowerCase();
