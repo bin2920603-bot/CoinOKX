@@ -85,6 +85,9 @@
   td.v{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;line-height:1.35;padding-top:3px;padding-bottom:3px}
   td.v .px{display:block;font-size:9.5px;font-weight:400;opacity:.72;font-variant-numeric:tabular-nums}
   td.chg{font-weight:600;min-width:64px}
+  th.chg,td.chg{position:sticky;left:var(--stickyw,170px);z-index:2;background:var(--ink);border-right:1px solid var(--rule)}
+  thead th.chg{z-index:4;background:var(--ink-2)}
+  tbody tr:hover td.chg{background:#16202B}
   .up{color:var(--up)}
   .down{color:var(--down)}
   .flat{color:var(--flat)}
@@ -154,6 +157,19 @@ const PX = v => {
 };
 
 let store = null, caps = {}, surges = {}, chg = {};
+
+// 전일대비 칸을 왼쪽에 고정하기 위해 '시총+코인' 칸 너비를 재서 위치를 맞춘다
+function setStickyW() {
+  const b = document.querySelector("th.coin");
+  if (b) document.documentElement.style.setProperty("--stickyw", (44 + b.offsetWidth) + "px");
+}
+const ro = (typeof ResizeObserver !== "undefined") ? new ResizeObserver(setStickyW) : null;
+function watchSticky() {
+  setStickyW();
+  const b = document.querySelector("th.coin");
+  if (ro) { ro.disconnect(); if (b) ro.observe(b); }
+}
+window.addEventListener("resize", setStickyW);
 
 async function loadChg() {
   try {
@@ -266,6 +282,7 @@ function render() {
   document.getElementById("scroll").innerHTML = visRows.length
     ? `<table><thead>${head.join("")}</thead><tbody>${body}</tbody></table>`
     : `<div class="empty"><strong>검색 결과 없음</strong>"${q}"와(과) 일치하는 코인이 없습니다.</div>`;
+  watchSticky();
 
   const failed = (store.failed || []).length;
   const surgeCount = Object.keys(surges).length;
