@@ -84,6 +84,7 @@
   td.coin .sym{color:var(--text-dim);font-size:11px;margin-left:5px}
   td.v{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;line-height:1.35;padding-top:3px;padding-bottom:3px}
   td.v .px{display:block;font-size:9.5px;font-weight:400;opacity:.72;font-variant-numeric:tabular-nums}
+  td.chg{font-weight:600;min-width:64px}
   .up{color:var(--up)}
   .down{color:var(--down)}
   .flat{color:var(--flat)}
@@ -151,7 +152,20 @@ const PX = v => {
   return v.toPrecision(3);
 };
 
-let store = null, caps = {}, surges = {};
+let store = null, caps = {}, surges = {}, chg = {};
+
+async function loadChg() {
+  try {
+    const r = await fetch("https://www.okx.com/api/v5/market/tickers?instType=SWAP");
+    const j = await r.json();
+    const m = {};
+    for (const t of (j.data || [])) {
+      const o = +t.open24h, l = +t.last;
+      if (o > 0 && l > 0) m[t.instId] = (l / o - 1) * 100;
+    }
+    chg = m;
+  } catch (e) { /* 실패하면 이전 값 유지 */ }
+}
 
 async function load() {
   const bust = "?t=" + Date.now();
@@ -175,6 +189,7 @@ async function load() {
     const r3 = await fetch("data/surge.json" + bust, {cache: "no-store"});
     if (r3.ok) surges = (await r3.json()).surges || {};
   } catch (e) { surges = {}; }
+  await loadChg();
   render();
 }
 
@@ -206,7 +221,7 @@ function render() {
     ? rows.filter(r => r.name.toLowerCase().includes(q) || r.sym.toLowerCase().includes(q))
     : rows;
 
-  const head = ['<tr><th class="rank">시총</th><th class="coin">코인</th>'];
+  const head = ['<tr><th class="rank">시총</th><th class="coin">코인</th><th class="chg">전일대비</th>'];
   slots.forEach((s, i) => head.push(`<th class="${i === 0 ? "now" : ""}">${hhmm(s)}</th>`));
   head.push("</tr>");
 
@@ -221,6 +236,10 @@ function render() {
       const px = p != null ? `<span class="px">${PX(p)}</span>` : "";
       return `<td class="v ${cls}">${KRW(v)}${px}</td>`;
     }).join("");
+    const cv = chg[r.sym + "-USDT-SWAP"];
+    const chgCell = cv == null
+      ? '<td class="v chg none">·</td>'
+      : `<td class="v chg ${cv > 0 ? "up" : cv < 0 ? "down" : "flat"}">${cv > 0 ? "+" : ""}${cv.toFixed(2)}%</td>`;
     const rank = r.rank === 99999 ? "–" : r.rank;
     const url = `https://www.okx.com/trade-swap/${r.sym.toLowerCase()}-usdt-swap`;
     const cls = [q ? "hit" : "", r.surge ? `surge-row-${r.surge.level}` : ""].filter(Boolean).join(" ");
@@ -238,7 +257,7 @@ function render() {
     }
     return `<tr${rowClass}><td class="rank">${rank}</td><td class="coin">` +
            `<a href="${url}" target="_blank" rel="noopener">${r.name}</a>` +
-           `<span class="sym">${r.sym}</span>${badge}</td>${cells}</tr>`;
+           `<span class="sym">${r.sym}</span>${badge}</td>${chgCell}${cells}</tr>`;
   }).join("");
 
   document.getElementById("scroll").innerHTML = visRows.length
