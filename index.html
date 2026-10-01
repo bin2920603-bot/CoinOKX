@@ -110,6 +110,13 @@
   .vol-ok{background:rgba(90,200,120,.16);color:#5ac878;box-shadow:inset 0 0 0 1px rgba(90,200,120,.35)}
   .vol-down{background:rgba(240,150,60,.18);color:#f0963c;box-shadow:inset 0 0 0 1px rgba(240,150,60,.4)}
   .vol-bad{background:rgba(242,96,108,.2);color:#f2606c;box-shadow:inset 0 0 0 1px rgba(242,96,108,.45)}
+  .drop-1{background:rgba(77,146,240,.16);color:#7FB2F5;box-shadow:inset 0 0 0 1px rgba(77,146,240,.4)}
+  .drop-2{background:rgba(60,120,230,.24);color:#5C9BF2;box-shadow:inset 0 0 0 1px rgba(60,120,230,.55)}
+  .drop-3{background:rgba(40,90,220,.32);color:#4D92F0;box-shadow:inset 0 0 0 1px rgba(40,90,220,.65)}
+  tr.drop-row-1 td.coin{box-shadow:inset 3px 0 0 #7FB2F5}
+  tr.drop-row-2 td.coin{box-shadow:inset 3px 0 0 #5C9BF2}
+  tr.drop-row-3 td.coin{box-shadow:inset 3px 0 0 #3B7BE8}
+  .rebound{background:rgba(242,96,108,.16);color:#F2606C;box-shadow:inset 0 0 0 1px rgba(242,96,108,.35)}
 </style>
 </head>
 <body>
@@ -171,16 +178,90 @@ function watchSticky() {
 }
 window.addEventListener("resize", setStickyW);
 
+// ==== 급등·급락 감지(화면에서 직접, 1분마다) 시작 ====
+// 서버(GitHub)는 자동 실행이 자주 밀려서, 화면이 열려 있는 동안 직접 가격 변화를 본다.
+// 10%부터 표시, 10~20% / 20~50% / 50%~ 세 단계. 오르면 급등(🔥), 내리면 급락(📉).
+const SURGE_WIN = 5 * 60e3;     // 약 5분 전 가격과 비교
+const SURGE_KEEP = 20 * 60e3;   // 배지를 20분 유지
+let hist = [];                  // 1분마다 찍은 가격/거래대금 기록
+let bActive = {};               // 화면에서 잡은 급등·급락 종목
+
+function surgeLevel(pct) { return pct >= 50 ? 3 : pct >= 20 ? 2 : pct >= 10 ? 1 : 0; }
+
+// 기록이 아직 없을 때(화면을 막 열었을 때)는 15분 칸에 저장된 가격과 비교
+function slotBase(sym) {
+  const c = store && store.coins && store.coins["OKX-" + sym];
+  if (!c || !c.prices) return null;
+  const keys = Object.keys(c.prices).sort();
+  if (!keys.length) return null;
+  const k = keys[keys.length - 1];
+  const age = Date.now() - Date.parse(k + ":00+09:00");
+  return age <= 20 * 60e3 ? c.prices[k] : null;
+}
+
+function surgeStep(now, snap) {
+  hist.push({t: now, d: snap});
+  hist = hist.filter(h => now - h.t <= 12 * 60e3);
+  let ref = null;
+  for (const h of hist) {
+    if (now - h.t < 3 * 60e3) continue;
+    if (!ref || Math.abs(now - h.t - SURGE_WIN) < Math.abs(now - ref.t - SURGE_WIN)) ref = h;
+  }
+  for (const [sym, cur] of Object.entries(snap)) {
+    const price = cur[0], acc = cur[1];
+    const r = ref ? ref.d[sym] : null;
+    const bp = r ? r[0] : slotBase(sym);
+    if (!bp) continue;
+    const pct = (price / bp - 1) * 100;
+    const volDiff = r ? Math.max(acc - r[1], 0) : null;
+    const dir = pct >= 0 ? "up" : "down";
+    const lv = surgeLevel(Math.abs(pct));
+    let a = bActive[sym];
+    if (a && lv && a.dir !== dir) a = null;   // 방향이 바뀌면 새로 시작
+    if (a) {
+      // peak = 급등이면 고점, 급락이면 저점. pullback = 그 지점 대비 현재 가격(%)
+      a.peak = a.dir === "up" ? Math.max(a.peak, price) : Math.min(a.peak, price);
+      a.pullback = +((price - a.peak) / a.peak * 100).toFixed(1);
+      if (volDiff != null) {
+        if (!a.base_vol) {
+          if (volDiff > 0) { a.base_vol = volDiff; a.vol_status = "유지"; }
+        } else {
+          const ratio = volDiff / a.base_vol;
+          a.vol_status = ratio >= 0.5 ? "유지" : ratio >= 0.2 ? "감소" : "급감";
+        }
+      }
+      if (lv && lv >= a.level) { a.level = lv; a.pct = +pct.toFixed(1); a.time = now; }
+    } else if (lv) {
+      bActive[sym] = {
+        dir: dir, level: lv, pct: +pct.toFixed(1), time: now, peak: price,
+        base_vol: volDiff > 0 ? volDiff : null, pullback: 0,
+        vol_status: volDiff != null ? "유지" : null
+      };
+    }
+  }
+  for (const k of Object.keys(bActive)) if (now - bActive[k].time > SURGE_KEEP) delete bActive[k];
+}
+
+// 화면에서 잡은 급등·급락이 있으면 그걸 쓰고, 없으면 서버가 저장한 급등을 쓴다
+function surgeOf(market) {
+  const b = bActive[market.split("-")[1]];
+  if (b) return {dir: b.dir, level: b.level, pct: b.pct, pullback: b.pullback, vol_status: b.vol_status};
+  return surges[market] || null;
+}
+// ==== 급등·급락 감지(화면에서 직접, 1분마다) 끝 ====
+
 async function loadChg() {
   try {
     const r = await fetch("https://www.okx.com/api/v5/market/tickers?instType=SWAP");
     const j = await r.json();
-    const m = {};
+    const m = {}, snap = {};
     for (const t of (j.data || [])) {
       const o = +t.open24h, l = +t.last;
       if (o > 0 && l > 0) m[t.instId] = (l / o - 1) * 100;
+      if (l > 0 && t.instId.endsWith("-USDT-SWAP")) snap[t.instId.split("-")[0]] = [l, +t.volCcy24h || 0];
     }
     chg = m;
+    surgeStep(Date.now(), snap);
   } catch (e) { /* 실패하면 이전 값 유지 */ }
 }
 
@@ -227,7 +308,7 @@ function render() {
     slots: c.slots || {},
     prices: c.prices || {},
     latest: c.slots?.[slots[0]] ?? 0,
-    surge: surges[market] || null
+    surge: surgeOf(market)
   }));
 
   const cOf = r => { const v = chg[r.sym + "-USDT-SWAP"]; return v == null ? -Infinity : v; };
@@ -261,12 +342,19 @@ function render() {
       : `<td class="v chg ${cv > 0 ? "up" : cv < 0 ? "down" : "flat"}">${cv > 0 ? "+" : ""}${cv.toFixed(2)}%</td>`;
     const rank = r.rank === 99999 ? "–" : r.rank;
     const url = `https://www.okx.com/trade-swap/${r.sym.toLowerCase()}-usdt-swap`;
-    const cls = [q ? "hit" : "", r.surge ? `surge-row-${r.surge.level}` : ""].filter(Boolean).join(" ");
+    const isDrop = !!(r.surge && r.surge.dir === "down");
+    const cls = [q ? "hit" : "", r.surge ? `${isDrop ? "drop" : "surge"}-row-${r.surge.level}` : ""].filter(Boolean).join(" ");
     const rowClass = cls ? ` class="${cls}"` : "";
     let badge = "";
     if (r.surge) {
-      badge = `<span class="surge-badge surge-${r.surge.level}">🔥${r.surge.pct}%</span>`;
-      if (r.surge.pullback != null && r.surge.pullback <= -1) {
+      badge = isDrop
+        ? `<span class="surge-badge drop-${r.surge.level}">📉${r.surge.pct}%</span>`
+        : `<span class="surge-badge surge-${r.surge.level}">🔥${r.surge.pct}%</span>`;
+      if (isDrop) {
+        if (r.surge.pullback != null && r.surge.pullback >= 1) {
+          badge += `<span class="surge-sub rebound">저점대비+${r.surge.pullback}%</span>`;
+        }
+      } else if (r.surge.pullback != null && r.surge.pullback <= -1) {
         badge += `<span class="surge-sub pullback">고점대비${r.surge.pullback}%</span>`;
       }
       if (r.surge.vol_status) {
@@ -285,11 +373,13 @@ function render() {
   watchSticky();
 
   const failed = (store.failed || []).length;
-  const surgeCount = Object.keys(surges).length;
+  const upCount = rows.filter(r => r.surge && r.surge.dir !== "down").length;
+  const dnCount = rows.filter(r => r.surge && r.surge.dir === "down").length;
   document.getElementById("meta").innerHTML =
     (q ? `<b>${visRows.length}/${rows.length}종목</b>` : `<b>${rows.length}종목</b>`) +
     ` · 단위 억원(작은 글씨=가격, 빨강 상승/파랑 하락) · 갱신 ${store.updated_at ? store.updated_at.slice(5, 16).replace("T", " ") : "–"}` +
-    (surgeCount ? ` · <b>급등 ${surgeCount}종목</b>` : "") +
+    (upCount ? ` · <b>급등 ${upCount}종목</b>` : "") +
+    (dnCount ? ` · <b>급락 ${dnCount}종목</b>` : "") +
     (failed ? ` · <b>${failed}종목 수집 실패</b>` : "");
 }
 
