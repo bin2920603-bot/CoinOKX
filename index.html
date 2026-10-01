@@ -127,6 +127,7 @@
     <select id="sort" aria-label="정렬 기준">
       <option value="cap" selected>시총순</option>
       <option value="vol">거래대금순</option>
+      <option value="chg">전일대비순</option>
     </select>
   </div>
 </header>
@@ -213,7 +214,9 @@ function render() {
     surge: surges[market] || null
   }));
 
+  const cOf = r => { const v = chg[r.sym + "-USDT-SWAP"]; return v == null ? -Infinity : v; };
   rows.sort((a, b) => mode === "cap" ? a.rank - b.rank || a.name.localeCompare(b.name)
+                    : mode === "chg" ? (cOf(b) > cOf(a) ? 1 : cOf(b) < cOf(a) ? -1 : 0)
                                      : b.latest - a.latest);
 
   const q = document.getElementById("q").value.trim().toLowerCase();
