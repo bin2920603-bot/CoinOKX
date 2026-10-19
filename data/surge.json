@@ -1,1 +1,1 @@
-{"surges":{"OKX-CT":{"level":2,"pct":40.6,"pullback":0.0,"vol_status":"유지"}},"active":{"OKX-CT":{"level":2,"pct":40.6,"time":"2026-10-19T16:40:29+09:00","peak":0.423,"base_vol":9747160.0,"pullback":0.0,"vol_status":"유지"}},"updated_at":"2026-10-19T16:40:29+09:00"}
+{"surges":{"OKX-CT":{"level":2,"pct":40.6,"pullback":-8.7,"vol_status":"유지"}},"active":{"OKX-CT":{"level":2,"pct":40.6,"time":"2026-10-19T16:40:29+09:00","peak":0.423,"base_vol":9747160.0,"pullback":-8.7,"vol_status":"유지"}},"updated_at":"2026-10-19T16:45:27+09:00"}
