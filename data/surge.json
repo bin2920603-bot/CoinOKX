@@ -1,1 +1,1 @@
-{"surges":{"OKX-IRYS":{"level":1,"pct":14.5,"pullback":0.0,"vol_status":"유지"}},"active":{"OKX-IRYS":{"level":1,"pct":14.5,"time":"2026-10-24T00:20:31+09:00","peak":0.05288,"base_vol":463981000.0,"pullback":0.0,"vol_status":"유지"}},"updated_at":"2026-10-24T00:20:31+09:00"}
+{"surges":{"OKX-IRYS":{"level":1,"pct":14.5,"pullback":-1.0,"vol_status":"감소"}},"active":{"OKX-IRYS":{"level":1,"pct":14.5,"time":"2026-10-24T00:20:31+09:00","peak":0.05288,"base_vol":463981000.0,"pullback":-1.0,"vol_status":"감소"}},"updated_at":"2026-10-24T00:25:24+09:00"}
