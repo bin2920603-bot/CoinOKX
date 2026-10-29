@@ -1,1 +1,1 @@
-{"surges":{"OKX-TEST003":{"level":3,"pct":69.4,"pullback":0.0,"vol_status":"유지"}},"active":{"OKX-TEST003":{"level":3,"pct":69.4,"time":"2026-10-29T16:40:32+09:00","peak":189.9803009664,"base_vol":1,"pullback":0.0,"vol_status":"유지"}},"updated_at":"2026-10-29T16:40:32+09:00"}
+{"surges":{"OKX-TEST003":{"level":3,"pct":69.4,"pullback":0.0,"vol_status":"급감"}},"active":{"OKX-TEST003":{"level":3,"pct":69.4,"time":"2026-10-29T16:40:32+09:00","peak":189.9803009664,"base_vol":1,"pullback":0.0,"vol_status":"급감"}},"updated_at":"2026-10-29T16:45:33+09:00"}
