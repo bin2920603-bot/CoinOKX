@@ -1,1 +1,1 @@
-{"surges":{"OKX-SOXS":{"level":1,"pct":10.4,"pullback":0.0,"vol_status":"감소"}},"active":{"OKX-SOXS":{"level":1,"pct":10.4,"time":"2026-10-30T05:05:28+09:00","peak":46.38,"base_vol":72129.80000000005,"pullback":0.0,"vol_status":"감소"}},"updated_at":"2026-10-30T05:15:29+09:00"}
+{"surges":{"OKX-SOXS":{"level":1,"pct":10.4,"pullback":-1.6,"vol_status":"급감"}},"active":{"OKX-SOXS":{"level":1,"pct":10.4,"time":"2026-10-30T05:05:28+09:00","peak":46.38,"base_vol":72129.80000000005,"pullback":-1.6,"vol_status":"급감"}},"updated_at":"2026-10-30T05:20:30+09:00"}
