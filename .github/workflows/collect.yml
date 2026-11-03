@@ -2,7 +2,7 @@ name: collect
 
 on:
   schedule:
-    - cron: "3-59/7 * * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -15,20 +15,28 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install requests
-      - run: python collect.py
-      - run: python ema5.py
-      - name: 커밋
+      - name: 반복 수집 (7분마다, 약 5시간 40분)
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data
-          git diff --staged --quiet && echo "변경 없음" && exit 0
-          git commit -m "data: $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
-          git pull --rebase --autostash
-          git push
+          START=$SECONDS
+          while [ $((SECONDS - START)) -lt 20400 ]; do
+            python collect.py || echo "collect 실패"
+            python ema5.py || echo "ema5 실패"
+            git add data
+            if git diff --staged --quiet; then
+              echo "변경 없음"
+            else
+              git commit -m "data: $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
+              git pull --rebase --autostash || true
+              git push || echo "push 실패"
+            fi
+            sleep 420
+          done
