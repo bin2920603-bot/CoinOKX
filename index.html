@@ -265,7 +265,7 @@ async function loadChg() {
     const j = await r.json();
     const m = {}, snap = {};
     for (const t of (j.data || [])) {
-      const o = +t.open24h, l = +t.last;
+      const o = +t.sodUtc0, l = +t.last;
       if (o > 0 && l > 0) m[t.instId] = (l / o - 1) * 100;
       if (l > 0 && t.instId.endsWith("-USDT-SWAP")) snap[t.instId.split("-")[0]] = [l, +t.volCcy24h || 0];
     }
